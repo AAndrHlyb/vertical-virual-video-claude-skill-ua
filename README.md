@@ -1,4 +1,4 @@
-# vertical-story-film-ua
+# vertical-virual-video-claude-skill-ua
 
 Скіл для Claude, який робить вертикальні сюжетні ролики українською — 9:16, під TikTok, Reels і Shorts.
 
