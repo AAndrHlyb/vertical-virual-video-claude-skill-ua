@@ -203,7 +203,9 @@ function topbar(s, lt) {
   X.save(); X.setTransform(1, 0, 0, 1, 0, 0);
   const g = X.createLinearGradient(0, 0, 0, 150); g.addColorStop(0, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,0)'); X.fillStyle = g; X.fillRect(0, 0, W, 150);
   X.fillStyle = B.dot || '#E5484D'; X.globalAlpha = 0.75 + 0.25 * Math.sin(lt * 5); X.beginPath(); X.arc(58, 72, 7, 0, TAU); X.fill(); X.globalAlpha = 1;
-  txt(`${B.tag || ''}${s.bar ? '  ·  ' + s.bar : ''}`.toUpperCase(), 78, 81, { size: 26, font: 'mono', weight: 600, color: B.color || '#C9CED6', shadow: false, ls: 2 });
+  const lab = `${B.tag || ''}${s.bar ? '  ·  ' + s.bar : ''}`.toUpperCase(), room = W - 78 - 56 - 190;   // место до часов
+  let fs = 26; while (fs > 16 && measure(lab, fs, 'mono', 600) + lab.length * 2 > room) fs--;          // длинная подпись не наезжает на часы
+  txt(lab, 78, 81, { size: fs, font: 'mono', weight: 600, color: B.color || '#C9CED6', shadow: false, ls: 2 });
   const ck = clockStr(s, lt); if (ck) txt(ck, W - 56, 82, { size: 30, font: 'mono', weight: 700, color: B.clockColor || '#F2EFE8', align: 'right', shadow: false });
   X.restore();
 }
