@@ -11,7 +11,7 @@ description: Вертикальний 9:16 ролик (TikTok/Reels/Shorts) ко
 
 ```bash
 cd ~ && git clone --depth 1 https://github.com/AAndrHlyb/vertical-virual-video-claude-skill-ua vsf 2>/dev/null || (cd vsf && git pull -q)
-cd ~/vsf && mkdir -p projects && cp -r example projects/<slug>
+cd ~/vsf/vertical-story-film-ua && mkdir -p projects && cp -r example projects/<slug>
 ```
 Якщо clone не пройшов — підключи репозиторій інструментом `add_repo` (owner `AAndrHlyb`, repo `vertical-virual-video-claude-skill-ua`) і повтори.
 
