@@ -3,6 +3,7 @@
 //   node engine/render.mjs projects/<slug> --stills 0.5,3,7.2   отдельные кадры + лист (out/stills.jpg)  — QA, секунды
 //   node engine/render.mjs projects/<slug> --sheet 1.5          лист: кадр каждые 1.5 с
 //   node engine/render.mjs projects/<slug> --from 10 --to 18    кусок (для правки одной сцены)
+//   --style noir  примерить стиль картинки без правки film.js
 //   --draft  3D в низком разрешении без теней: листы в 3–4 раза быстрее (только для проверки кадрирования)
 //   --workers N (по умолчанию = число ядер, максимум 4), --crf 18
 // Скорость в облаке (2 ядра, программный WebGL): 3D-план ≈0.6 с/кадр, 2D ≈0.1 с/кадр -> 2 мин ролика ≈ 25–40 мин. Запускай в фоне.
@@ -16,7 +17,7 @@ const TYPES = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 't
 const srv = http.createServer((q, r) => { const f = path.join(ROOT, decodeURIComponent(q.url.split('?')[0]));
   fs.readFile(f, (e, d) => { if (e) { r.statusCode = 404; return r.end(); } r.setHeader('Content-Type', TYPES[path.extname(f)] || 'application/octet-stream'); r.end(d); }); });
 await new Promise(ok => srv.listen(0, ok)); const PORT = srv.address().port;
-const URL0 = `http://127.0.0.1:${PORT}/${path.relative(ROOT, proj).split(path.sep).join('/')}/scene.html` + (opt('draft') ? '?gl=0.35&shadow=0' : '');
+const URL0 = `http://127.0.0.1:${PORT}/${path.relative(ROOT, proj).split(path.sep).join('/')}/scene.html` + '?' + [opt('draft') ? 'gl=0.35&shadow=0' : '', opt('style') ? 'style=' + opt('style') : ''].filter(Boolean).join('&');
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-vsync'] });
 async function page() { const p = await browser.newPage({ viewport: { width: 540, height: 960 } }); const errs = [];
   p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error' && !/status of 404/.test(m.text())) errs.push(m.text()); });

@@ -130,7 +130,8 @@ function initGL(o) {
 }
 function world(name) {
   if (!GL.worlds[name]) { const b = FILM.worlds[name]; if (!b) throw new Error('нет мира ' + name);
-    const w = b(GL); w.camera = w.camera || new THREE.PerspectiveCamera(35, W / H, 0.05, 200); w.camera.aspect = W / H; w.camera.updateProjectionMatrix(); GL.worlds[name] = w; }
+    const w = b(GL); w.camera = w.camera || new THREE.PerspectiveCamera(35, W / H, 0.05, 200); w.camera.aspect = W / H; w.camera.updateProjectionMatrix();
+    if ((STYLES[FILM.style] || {}).toon) toonify(w.scene); GL.worlds[name] = w; }
   return GL.worlds[name];
 }
 // плавный пролёт камеры: camPath(cam, lt, [[0,{pos:[..],at:[..]}],[3,{...}]])
@@ -210,12 +211,36 @@ function topbar(s, lt) {
   X.restore();
 }
 
-/* ---------- пост: свечение, виньетка, зерно ---------- */
-function post() {
-  const fx = Object.assign({ bloom: 0.32, vignette: 0.55, grain: 0.06 }, FILM.fx || {});
-  const c = MAIN.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.filter = 'none';
-  c.drawImage(SCN, 0, 0);
-  if (fx.bloom) { const q = TMP.getContext('2d'); q.setTransform(1, 0, 0, 1, 0, 0); q.clearRect(0, 0, W, H); q.filter = 'brightness(0.9) contrast(2.2) blur(22px)';
+/* ---------- стили картинки: FILM.style на весь ролик или s.style у отдельного плана (кроме toon) ----------
+   default — базовый вид. Остальные выбираются ПОД ТЕМУ, не по привычке:
+   noir — ч/б, жёсткий контраст (детектив, прошлое, воспоминание);  film — тёплая плёнка, сепия, сильное зерно (ретро, биография, 80-е–90-е);
+   neon — насыщенный, сильное свечение, розово-голубой налёт (киберпанк, хакеры, ночной город, игры);  cold — холодный синеватый (тревога, зима, больница, космос);
+   pastel — мягкий светлый, низкий контраст (дети, уют, лайфстайл);  toon — мультяшный: плоские тени в 3 ступени + чёрный контур (детские темы, юмор, сказки; только на весь ролик). */
+export const STYLES = {
+  default: {},
+  noir:   { filter: 'grayscale(1) contrast(1.3) brightness(1.15)', grain: 0.09, bloom: 0.18, vignette: 0.7 },
+  film:   { filter: 'sepia(0.35) saturate(0.9) contrast(1.06) brightness(1.02)', grain: 0.11, vignette: 0.7, tint: ['#FF9A3C', 0.06] },
+  neon:   { filter: 'saturate(1.6) contrast(1.15)', bloom: 0.62, tint: ['#FF2BD6', 0.07], tint2: ['#00E5FF', 0.06] },
+  cold:   { filter: 'saturate(0.8) contrast(1.05)', tint: ['#2A6CFF', 0.08], bloom: 0.25 },
+  pastel: { filter: 'saturate(0.85) brightness(1.1) contrast(0.9)', grain: 0.03, vignette: 0.3, bloom: 0.2 },
+  toon:   { toon: true, filter: 'saturate(1.15)', grain: 0.02, bloom: 0.15, vignette: 0.35 },
+};
+function toonify(sc) {
+  const grad = new THREE.DataTexture(new Uint8Array([70, 70, 70, 255, 160, 160, 160, 255, 255, 255, 255, 255]), 3, 1); grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
+  const line = new THREE.MeshBasicMaterial({ color: '#0B0B0E', side: THREE.BackSide }), out = [];
+  sc.traverse(o => { if (!o.isMesh || !o.material || !o.material.isMeshStandardMaterial) return; const m = o.material;
+    o.material = new THREE.MeshToonMaterial({ color: m.color, map: m.map, emissive: m.emissive, emissiveIntensity: m.emissiveIntensity, gradientMap: grad, side: m.side, transparent: m.transparent, opacity: m.opacity });
+    if (o.castShadow && o.geometry.attributes.position.count < 4000) out.push(o); });
+  for (const o of out) { const h = new THREE.Mesh(o.geometry, line); h.scale.setScalar(1.045); h.castShadow = false; o.add(h); }
+}
+/* ---------- пост: стиль, свечение, виньетка, зерно ---------- */
+function post(i) {
+  const st = STYLES[(FILM.shots[i] || {}).style || FILM.style || 'default'] || {};
+  const fx = Object.assign({ bloom: 0.32, vignette: 0.55, grain: 0.06 }, st, FILM.fx || {});
+  const c = MAIN.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.filter = fx.filter || 'none';
+  c.drawImage(SCN, 0, 0); c.filter = 'none';
+  for (const tn of [fx.tint, fx.tint2]) if (tn) { c.globalCompositeOperation = 'soft-light'; c.globalAlpha = tn[1] * 5; c.fillStyle = tn[0]; c.fillRect(0, 0, W, H); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; }
+  if (fx.bloom) { const q = TMP.getContext('2d'); q.setTransform(1, 0, 0, 1, 0, 0); q.clearRect(0, 0, W, H); q.filter = (fx.filter ? fx.filter + ' ' : '') + 'brightness(0.9) contrast(2.2) blur(22px)';
     q.drawImage(SCN, 0, 0, W / 3, H / 3); q.filter = 'none'; c.globalCompositeOperation = 'screen'; c.globalAlpha = fx.bloom; c.drawImage(TMP, 0, 0, W / 3, H / 3, 0, 0, W, H); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; }
   if (fx.vignette) { const g = c.createRadialGradient(W / 2, H * 0.48, H * 0.25, W / 2, H * 0.5, H * 0.78); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${fx.vignette})`); c.fillStyle = g; c.fillRect(0, 0, W, H); }
   if (fx.grain) { c.globalCompositeOperation = 'overlay'; c.globalAlpha = fx.grain * 4; c.drawImage(GRAIN[FRAME % GRAIN.length], 0, 0, W, H); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; }
@@ -246,7 +271,7 @@ export function frame(t) {
     renderShot(b - 1, t, BA.getContext('2d')); renderShot(b, t, BB.getContext('2d')); composite(kind, (t - a0) / dur, dir); done = true; break;
   }
   if (!done) renderShot(i, t, SCN.getContext('2d'));
-  post(); setX(MAIN.getContext('2d')); const s = FILM.shots[i];
+  post(i); setX(MAIN.getContext('2d')); const s = FILM.shots[i];
   topbar(s, t - T0[i]); burn(t);
   if (FILM.overlay) { X.save(); FILM.overlay(t, i); X.restore(); }
   if (window.QA_HOOK) window.QA_HOOK(i);
@@ -261,6 +286,7 @@ export async function run(film, base = BASE) {
   if (Q.has('gl')) FILM.gl = Object.assign({}, FILM.gl, { glScale: +Q.get('gl') });
   if (Q.has('aa')) FILM.gl = Object.assign({}, FILM.gl, { aa: Q.get('aa') !== '0' });
   if (Q.has('env')) FILM.gl = Object.assign({}, FILM.gl, { env: Q.get('env') !== '0' });
+  if (Q.has('style')) FILM.style = Q.get('style');
   if (Q.has('shadow')) FILM.gl = Object.assign({}, FILM.gl, { shadows: Q.get('shadow') !== '0' });
   // timing.json (subs.py --align по реальному голосу): растянуть планы каждого блока озвучки под голос
   try { const r = await fetch('timing.json'); if (r.ok) { const tm = await r.json(); const nb = (FILM.narr || []).map(n => n[0]);

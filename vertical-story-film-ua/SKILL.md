@@ -19,13 +19,14 @@ cd ~/vsf/vertical-story-film-ua && mkdir -p projects && cp -r example projects/<
 | --- | --- |
 | `engine/core.js` | цикл кадру, плани, переходи, авто-камера, світіння/віньєтка/зерно, верхня плашка з годинником, що йде, текст (Oswald / JetBrains Mono / PT Serif з кирилицею), 2D: `txt rich wrap rglow spotCone bokeh dust blurred` |
 | `engine/stage3d.js` | `stage(GL,'noir'|'office'|'lab'|'alarm'|'night'|'warm')`, `spot` з видимим конусом, `room floor cityWindow motes`, текстури `TEX.wood/concrete/paper/grid/tiles`, живі екрани `screen()`, реквізит `PROP.*`, `frameW/frameH` |
-| `engine/cast3d.js` | 3D-люди `person({...})`, пози `POSE.*`, `walkTo`, `blinkAt`, `mix` |
+| `engine/cast3d.js` | 3D-люди `person()`, 40 готових архетипів `cast()`, випадкова зовнішність `vary()`, натовп `crowd()`, собака й кішка `animal()`, пози `POSE.*`, `walkTo`, `blinkAt`, `mix` |
 | `engine/render.mjs` | рендер: `--stills`, `--sheet`, `--draft`, `--from/--to`, повний |
 | `engine/audio.py` | партитура за настроєм + шуми за подіями + голос із пригинанням музики + гучність + збирання mp4 + перевірка звуку |
 | `engine/subs.py` | `.srt` і `ozvuchka.txt` з того самого тексту; `--align` підганяє плани під справжній голос |
 | `engine/qa.py` | жвавість кадру, мертві шматки, чорні кадри, звук; поруч — еталон |
 
 `example/film.js` — робочий приклад усіх прийомів. Прочитай його один раз замість документації.
+`example/castsheet` — аркуш усіх персонажів і стилів картинки.
 
 ## 1. Спершу жанр — він вирішує все інше
 
@@ -91,20 +92,47 @@ cd ~/vsf/vertical-story-film-ua && mkdir -p projects && cp -r example projects/<
 - **Текст на екрані — мінімум**: число, дата, назва, 1–4 слова. Розмір не менше 40 px, заголовки 90–230 px. Субтитри не вшиваються (`burn:false`) — віддаються `.srt`. Якщо користувач хоче вшиті — `burn:true`: по 1–3 слова, акцент кольором, y≈61% висоти.
 - **Верхня плашка**: `bar:{tag:'СПРАВА #07'}` + у плану `bar:'ЦЕХ А'`, `clock:'09:41:00'` — годинник іде сам. Це тримає відчуття «документа».
 - **Пост** (`fx`): світіння 0.25–0.4, віньєтка 0.5–0.6, зерно 0.05–0.07. Не вимикай — без них 3D виглядає іграшковим.
+- **Стиль картинки** — за замовчуванням звичайний. Окремий стиль обирай лише тоді, коли він підсилює тему: `'noir'` (детектив, минуле), `'film'` (ретро, біографія), `'neon'` (хакери, нічне місто, ігри), `'cold'` (тривога, зима, лікарня), `'pastel'` (діти, затишок), `'toon'` (казка, гумор, дитячі теми — лише на весь ролик). Ставиться в `run({ style })` на весь ролик або `style` у плану — наприклад, ч/б для спогаду. Приміряти без правок: `--style noir`.
 
 ## 6. Персонажі
 
 ```js
-const man = person({ sex:'m', hairStyle:'sidepart', top:'suit', topColor:'#2F3A4A', skin:SKIN.fair, hair:HAIRC.dark, glasses:true });
-// в update(w, lt): man.pose(mix(walkTo(man, lt, [-2,0.5], [2,0.5], 1.3), { blink: blinkAt(lt) }));
+const hero = cast('watcher');                          // готовий архетип
+const kid  = cast('kid_girl', { topColor:'#3A8C6B' }); // архетип + свої правки
+const p    = person({ sex:'f', age:'old', build:'heavy', hairStyle:'bun', top:'coat', hat:'beret', scarf:'#5A1E1E' });
+const extra = person(vary(17, { age:'teen' }));        // випадкова, але однакова при кожному рендері зовнішність
+// в update(w, lt): hero.pose(mix(walkTo(hero, lt, [-2,0.5], [2,0.5], 1.3), { blink: blinkAt(lt) }));
 ```
-- Зачіски: `buzz crop sidepart slick curly bald` (ч), `bob long pony bun` (ж). Усі закривають чоло й потилицю, тримаються на черепі в будь-якому ракурсі.
-- Одяг `top`: `sweater suit labcoat hoodie uniform shirt`; `hat:'fedora'|'cap'|'helmet'`, `tie`, `badge`, `beard`, `glasses`.
-- Пози `POSE`: `stand walk(phase) run sit type(lt) point(k) hold(k) phone shrug(k) handsUp(k) facepalm(k) cheer(k,lt)`. Обличчя: `blink brow(-1..1) mouth:'flat'|'smile'|'frown'|'o' lookX lookY`, голова `yaw nod tilt`.
-- Лікоть і коліно гнуться лише в правильний бік — знак задає риг, у позі лише величина (≥0). Стопа завжди на підлозі — висоту таза рахує риг.
-- **Ракурс обирає камера, а не малювання.** Профіль під час ходьби — просто камера збоку. 3/4 — найживіший ракурс для облич.
-- **Кастинг за роллю**: слідчий — `suit`+`fedora`; науковець — `labcoat`+`glasses`; оператор — `uniform`+`badge`; хакер — `hoodie`; чиновник — `suit`+`slick`. Етапи біографії — той самий `person` з іншими `hairStyle/top/hair:HAIRC.grey`.
-- Предмет у руці: `man.rig.arms[1].grip.add(PROP.usb())` + `POSE.hold(1)`.
+
+**Архетипи `cast(ім'я)`** — обирай під роль, не бери тих самих із ролика в ролик:
+
+| Група | Імена |
+| --- | --- |
+| Приховані | `shadow` (каптур, обличчя немає) · `watcher` (каптур, світні очі) · `hacker_hood` · `hacker_girl` · `masked` (балаклава) · `faceless` (біла маска) · `spy` (плащ, капелюх, окуляри) · `agent` · `stranger` (капелюх, обличчя немає) |
+| Звичайні | `guy` `girl` `student` `student_f` `gamer` `office` `office_f` `dad` `mom` `hipster` `curly_f` |
+| Діти й вік | `kid_boy` `kid_girl` `schoolkid` `kid_hood` `grandpa` `grandma` |
+| Професії | `detective` `cop` `soldier` `scientist` `doctor` `nurse` `worker` `courier` `chef` `boss` `ceo_f` `athlete` `artist` `rocker` `astronaut` |
+
+**Параметри `person()`** (будь-який можна передати й у `cast()` другим аргументом):
+- `age`: `kid` (0.6 зросту, велика голова) · `teen` · `adult` · `old` (сутулиться, зморшка). `build`: `slim` · `avg` · `heavy`.
+- Зачіски `hairStyle`: `buzz crop sidepart slick curly afro mohawk spiky bald long_m bob bangs long pony bun pigtails braids`. Кольори `HAIRC`: від `black` до `pink`/`blue`/`green`. Шкіра `SKIN`: 8 тонів.
+- Одяг `top`: `sweater tshirt shirt suit jacket coat labcoat hoodie uniform vest dress`; `shirt` — колір сорочки під піджаком.
+- Приховати особу: `hood:true` (каптур на голові), `face:'hidden'` (обличчя в тіні), `eyesGlow:'#FF3B2E'`, `mask:'balaclava'|'plain'|'medical'|'shades'`.
+- Голова: `hat:'fedora'|'cap'|'helmet'|'hardhat'|'beanie'|'beret'` + `hatColor`; `glasses`, `beard`, `mustache`, `headphones`.
+- Деталі: `tie`, `badge`, `backpack`, `scarf` (колір).
+
+**Пози `POSE`**: `stand walk(phase) run sneak(phase) sit type(lt) point(k) hold(k) phone wave(k,lt) armsCrossed handsPockets think(k) cry(k) shrug(k) handsUp(k) facepalm(k) cheer(k,lt) jump(lt)`. Обличчя: `blink brow(-1..1) mouth:'flat'|'smile'|'frown'|'o' lookX lookY`, голова `yaw nod tilt`.
+
+**Натовп**: `const c = crowd(scene, { n:24, area:[x0,x1,z0,z1], seed:3, mode:'walk'|'stand'|'mixed', base:{age:'teen'} })`, в `update`: `c.update(lt)`. Масовка полегшена й без тіней — 20–40 людей не гальмують рендер. Головних героїв роби через `cast/person`, а не з натовпу.
+
+**Тварини**: `const dog = animal('dog'|'cat', { color, size })`, в `update`: `dog.pose({ walk: фаза, t: lt, wag: true, sit, look })`.
+
+- Лікоть і коліно гнуться лише правильно — у позі лише величина (≥0). Стопа завжди на підлозі, у дітей теж.
+- **Ракурс обирає камера, а не малювання.** Профіль під час ходьби — камера збоку. 3/4 — найживіший ракурс для облич.
+- Дітей і тварин став ближче до камери, ніж дорослих, інакше їх закриють. Камеру для них опускай до висоти 0.8–1.0 м.
+- Етапи біографії — той самий `person` з іншими `age`, `hairStyle`, `top`.
+- Предмет у руці: `hero.rig.arms[1].grip.add(PROP.usb())` + `POSE.hold(1)`.
+- Подивитися всіх: `node engine/render.mjs example/castsheet --sheet 3`.
 
 ## 7. Камера й кадр 9:16
 
