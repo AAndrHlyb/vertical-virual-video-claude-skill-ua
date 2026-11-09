@@ -8,6 +8,8 @@ export { W, H, X, clamp, lerp, inv, eIO, eOut, eIn, back, spring, hash, hash2, n
 export const C = { bg: '#000', ink: '#EDEDED', dim: '#8A8A8A', faint: '#3A3A3A',
   pink: '#CC6677', blue: '#88CCEE', indigo: '#332288', yel: '#DDCC77', green: '#2EE6A0', teal: '#44AA99', red: '#FF4A3D', orange: '#FF8A1F', gold: '#F5B83D', violet: '#9C8CFF', fire: '#FF7A1A' };
 
+export const hue = (h, s = 70, l = 62, a = 1) => `hsla(${((h % 1) + 1) % 1 * 360}, ${s}%, ${l}%, ${a})`;   // цвет по кругу 0..1 — раскраска множества точек
+
 /* ================= ВРЕМЯ И ПЕТЛЯ ================= */
 export let D = 10;                                                   // длина петли, задаётся в film()
 export const ph = (t, n = 1) => ((t / D) * n % 1 + 1) % 1;            // фаза 0..1, n целых циклов за петлю — шва нет

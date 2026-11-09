@@ -24,7 +24,8 @@ peak = np.percentile(v.reshape(n, -1), 99.8, axis=1)                    # чёр
 for a, b in runs(peak < 25, max(2, int(fps * 0.1))): bad.append(f'ЧЁРНЫЙ ЭКРАН {ts(a)}–{ts(b)} — не гаси в чёрный, используй xfade')
 for i in range(1, n - 1):                                             # «пропало всё»: картинка резко темнеет и вскоре возвращается
     nb = max(m[max(0, i - 3)], m[min(n - 1, i + 3)])
-    if m[i] < 0.6 * nb and nb > 4 and abs(m[i - 1] - m[i]) > 0.25 * nb: bad.append(f'ПРОПАЛО ИЗОБРАЖЕНИЕ около {ts(i)} — проверь условия по изингу с перелётом (eBack/back > 1)'); break
+    back = m[i + 1:min(n, i + int(fps * 0.7))]                       # пропажа = провал и быстрый возврат (а не задуманное затемнение сцены)
+    if m[i] < 0.6 * nb and nb > 4 and abs(m[i - 1] - m[i]) > 0.25 * nb and len(back) and back.max() > 0.85 * m[i - 1]: bad.append(f'ПРОПАЛО ИЗОБРАЖЕНИЕ около {ts(i)} — проверь условия по изингу с перелётом (eBack/back > 1)'); break
 for a, b in runs(d < 0.012, int(fps * 0.6)):                          # стоп-кадр внутри ролика
     if 0 < a and b < len(d): bad.append(f'ФРИЗ {ts(a)}–{ts(b + 1)} — кадр стоит; добавь движение (drift, дыхание, живое число)')
 for i in [i for i in range(1, len(d) - 1) if d[i] > max(3.0, 5 * max(d[i - 1], d[i + 1]))][:5]: bad.append(f'РЫВОК на {ts(i + 1)} — что-то появилось/исчезло скачком')
