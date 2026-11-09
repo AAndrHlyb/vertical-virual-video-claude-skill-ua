@@ -282,7 +282,7 @@ function glyph(q, a, c, o) { if (a <= 0.01) return; M(q.s, q.x + q.w / 2, q.y, {
 function radical(q, a, c, k = 1) { if (a <= 0.01) return; const s = q.size, y = q.y; path([[q.x, y + 0.02 * s], [q.x + 0.1 * s, y - 0.05 * s], [q.x + 0.26 * s, y + q.bot], [q.x + q.sw - 0.04 * s, y + q.top], [q.x + q.sw + q.w, y + q.top]], { c, w: Math.max(2, s * 0.035), a, cap: 'butt' }, k); }
 const colOf = (q, o) => (o.colors && (o.colors[q.key] || o.colors[q.s])) || o.color || C.ink;
 // рисует формулу; o: { write: 0..1 — «пишется» слева направо, a, color, colors: {ключ или текст: цвет} }
-export function drawEx(E, o = {}) { const n = E.items.length + E.rads.length, wr = o.write ?? 1, A = o.a ?? 1; let i = 0;
+export function drawEx(E, o = {}) { const n = E.items.length + E.rads.length + E.bars.length, wr = o.write ?? 1, A = o.a ?? 1; let i = 0;
   const all = [...E.rads.map(q => ['r', q]), ...E.bars.map(q => ['b', q]), ...E.items.map(q => ['i', q])].sort((p, q) => p[1].x - q[1].x);
   for (const [t, q] of all) { const k = clamp(wr * (n + 1.5) - i++); if (k <= 0) continue;
     if (t === 'i') glyph(q, A * k, colOf(q, o)); else if (t === 'r') radical(q, A, colOf(q, o), k); else line([q.x, q.y], [q.x + q.w, q.y], { c: colOf(q, o), w: Math.max(2, q.size * 0.035), a: A }, k); } }
@@ -331,16 +331,16 @@ export const stepAt = (t, list) => list.findIndex(([a, b]) => t >= a && t < b);
 
 /* ================= ЗАПУСК ================= */
 // film({ d, draw(t), sfx:[[t,'pop',громкость,длит]], bloom, zoom=0.86, xfade=0, drift=0.006, title, narr })
-// xfade: последние xfade секунд плавно перетекают в начало — вместо затемнения в чёрный. drift: «дыхание» камеры против фризов
+// xfade: последние xfade секунд плавно перетекают в первый кадр — вместо затемнения в чёрный. drift: «дыхание» камеры против фризов
 // zoom: «камера» чуть отдалена, чтобы картинка не залезала под лайки/аватар справа и подпись снизу (1 — во весь кадр)
 // звуки (без музыки): pop snap slide draw click ding crackle drip thud rise whoosh tick beep hit swoosh_in heartbeat
-export function film(o) { D = o.d; const xf = o.xfade ?? 0, L = o.d - xf, z = o.zoom ?? 0.86, dr = o.drift ?? 0.02;
+export function film(o) { D = o.d; const xf = o.xfade ?? 0, z = o.zoom ?? 0.86, dr = o.drift ?? 0.02;
   // один кадр сцены в момент t (непрозрачный: свой чёрный фон). drift — едва заметное «дыхание» камеры, чтобы паузы не выглядели зависанием
   // камера: приближение и сдвиг не замирают одновременно
   const one = (t, a = 1) => { X.save(); X.globalAlpha = a; bg(o.bg); const th = TAU * t / o.d, zz = z * (1 + dr * Math.sin(th)); X.translate(W * 0.48 + dr * 900 * Math.sin(2 * th + 1), H * 0.46 + dr * 500 * Math.cos(3 * th)); X.scale(zz, zz); X.translate(-W / 2, -H / 2);
     try { o.draw(t); } catch (e) { console.error('draw(' + t.toFixed(2) + '): ' + e.message); } X.restore(); };
-  // xfade: конец ролика плавно перетекает в начало (без чёрного кадра). Итоговая длина петли = d − xfade
-  const frame = (p, t) => { if (xf > 0 && t < xf) { one(t + L); one(t, eIO(t / xf)); } else one(t); };
+  // xfade: последние xfade секунд плавно перетекают в первый кадр (draw(t − d) ≈ начало). Файл начинается чисто, без кадров из конца
+  const frame = (p, t) => { if (xf > 0 && t > o.d - xf) { one(t); one(t - o.d, eIO((t - (o.d - xf)) / xf)); } else one(t); };
   run({ title: o.title || 'loop', fps: o.fps || 30, bg: '#000', accent: o.accent || C.green, fx: { bloom: o.bloom ?? 0, vignette: o.vignette ?? 0, grain: o.grain ?? 0 },
-    shots: [{ d: L, cam: false, pop: false, draw: frame, sfx: (o.sfx || []).map(([tt, ...r]) => [tt >= L ? tt - L : tt, ...r]) }],
+    shots: [{ d: o.d, cam: false, pop: false, draw: frame, sfx: o.sfx || [] }],
     narr: o.narr || [], audio: { music: 0, loop: true, sfx: o.sfxGain ?? 1, lufs: o.lufs ?? -16 } }); }
