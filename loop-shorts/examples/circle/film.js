@@ -8,18 +8,18 @@ function sec(n, k, go) { const Dl = K.TAU / n, s = Math.PI * r / (n / 2), up = k
   return [K.lerp(O[0], a1[0], go), K.lerp(O[1], a1[1], go), phi - Dl / 2, phi + Dl / 2, up ? C.blue : C.pink]; }
 const row = (n, a, goF = () => 1) => { if (a > 0) for (let k = 0; k < n; k++) { const [x, y, a0, a1, c] = sec(n, k, goF(k)); K.sector(x, y, r, a0, a1, { fill: c, c: C.ink, w: n > 16 ? 1 : 2, a, fa: 0.92 }); } };
 const STEPS = ['S = ?', 'S = frac{2@d π@p r@a}{2@e} · r@b', 'S = π@p r@a · r@b', 'S = π@p r@a ^{2@b}'];
-K.film({ d: D, title: 'Площадь круга',
+K.film({ d: D, xfade: 1.2, title: 'Площадь круга',
   sfx: [[0.2, 'draw', 0.5, 1.4], [4.2, 'draw', 0.4, 1.2], [5.6, 'pop', 0.5], [7.4, 'draw', 0.4, 0.6], [8.2, 'slide', 0.5, 1.8], [10.2, 'snap', 0.7], [11.6, 'whoosh', 0.3], [13.4, 'whoosh', 0.3],
     [15.4, 'draw', 0.4, 0.8], [16.4, 'pop', 0.5], [17.2, 'pop', 0.5], [19.6, 'slide', 0.5], [21.2, 'slide', 0.5], [22.8, 'slide', 0.5], [24.0, 'ding', 0.7], [28.6, 'whoosh', 0.3]],
   draw(t) {
-    const fade = 1 - seg(t, 28.6, 29.7);                                                             // в конце всё гаснет — петля с чистого листа
+    const fade = 1;                                                             // в конце всё гаснет — петля с чистого листа
     K.X.save(); K.X.globalAlpha = fade;
     // формула сверху
     const E = K.exChain(STEPS, [19.4, 21.0, 22.6], 1.0, t, K.W / 2, 380, { size: 96 });
     if (t > 23.8) K.exBox(E, 'ALL', C.yel, seg(t, 23.9, 24.5), 18);
     // 1. круг рисуется, радиус
-    const go8 = seg(t, 8.2, 10.2, K.eBack), cut = seg(t, 7.4, 8.0);
-    if (go8 < 1 && t < 11) { K.circ(O[0], O[1], r, { fill: cut < 1 ? C.blue : undefined, fa: (1 - cut) * seg(t, 1.2, 2.0), w: 0 }); row(8, cut, k => seg(t, 8.2 + k * 0.12, 9.2 + k * 0.12, K.eBack)); }
+    const cut = seg(t, 7.4, 8.0);
+    if (t < 10.2) { K.circ(O[0], O[1], r, { fill: cut < 1 ? C.blue : undefined, fa: (1 - cut) * seg(t, 1.2, 2.0), w: 0 }); row(8, cut, k => seg(t, 8.2 + k * 0.12, 9.2 + k * 0.12, K.eBack)); }
     K.circ(O[0], O[1], r, { c: C.ink, w: 3, a: 1 - seg(t, 8.2, 8.6) }, seg(t, 0.2, 1.4));
     const rr = seg(t, 1.6, 2.2) * (1 - seg(t, 7.0, 7.4));
     if (rr > 0) { K.line(O, [O[0] + r, O[1]], { c: C.ink, w: 4, a: rr }, rr); K.dot(O[0], O[1], 7, C.ink); M('r', O[0] + r / 2, O[1] - 32, { size: 58, alpha: rr }); }
