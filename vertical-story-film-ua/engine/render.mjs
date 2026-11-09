@@ -9,7 +9,7 @@
 // Скорость в облаке (2 ядра, программный WebGL): 3D-план ≈0.6 с/кадр, 2D ≈0.1 с/кадр -> 2 мин ролика ≈ 25–40 мин. Запускай в фоне.
 import { createRequire } from 'module'; import http from 'http'; import fs from 'fs'; import path from 'path'; import { spawn, execFileSync } from 'child_process'; import os from 'os';
 const require = createRequire(import.meta.url); const { chromium } = require('playwright');
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');   // корень репозитория: рендерит и этот скилл, и loop-shorts
 const args = process.argv.slice(2); const proj = path.resolve(args[0] || '.');
 const opt = k => { const i = args.indexOf('--' + k); return i < 0 ? null : (args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : true); };
 const OUT = path.join(proj, 'out'); fs.mkdirSync(OUT, { recursive: true });

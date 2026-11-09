@@ -86,6 +86,25 @@ def sfx_spin(d=2.0, f0=180, f1=1400):  # раскрутка (ротор, мот�
 def sfx_crowd(d=2.0): return bp(noise(d), 300, 2500) * (0.6 + 0.4 * np.sin(2 * np.pi * 0.7 * tt(d))) * 0.35
 def sfx_door(d=0.7): return sfx_hit(d) * 0.5 + bp(noise(d), 200, 1500) * env(int(d * SR), 0.01, 0.3) * 0.6
 def sfx_keys(d=0.4): return sfx_type(d) * 1.2
+def sfx_pop(d=0.12):         # лёгкий «поп»: появление элемента
+    t = tt(d); f = 900 * np.exp(-t * 18) + 500; return np.sin(2 * np.pi * np.cumsum(f) / SR) * env(len(t), 0.002, d, 3) * 0.55
+def sfx_snap(d=0.16):        # стыковка: сухой щелчок + короткий тон
+    t = tt(d); return (bp(noise(d), 1500, 5000) * env(len(t), 0.001, 0.025) * 0.9 + np.sin(2 * np.pi * 740 * t) * env(len(t), 0.001, 0.09, 3) * 0.35)
+def sfx_slide(d=0.5):        # скольжение/передвижение: мягкий шум с подъёмом и спадом
+    t = tt(d); return bp(noise(d), 500, 3000) * np.sin(np.pi * t / d) ** 2 * 0.28
+def sfx_draw(d=0.8):         # рисование линии: шорох карандаша
+    t = tt(d); return bp(noise(d), 1800, 6000) * (0.6 + 0.4 * np.sin(2 * np.pi * 11 * t)) * env(len(t), 0.03, d, 1.2) * 0.22
+def sfx_click(d=0.05): t = tt(d); return bp(noise(d), 2000, 7000) * env(len(t), 0.0005, 0.012) * 0.8
+def sfx_ding(d=1.0, f=1568):  # мягкий колокольчик: итог, «готово»
+    t = tt(d); return (np.sin(2 * np.pi * f * t) + 0.4 * np.sin(2 * np.pi * f * 2.76 * t) * np.exp(-t * 6)) * env(len(t), 0.002, d, 5) * 0.35
+def sfx_crackle(d=1.5):      # треск огня
+    t = tt(d); x = np.zeros(len(t)); k = rng.integers(0, len(t), int(d * 40))
+    for i in k: n = min(200, len(t) - i); x[i:i + n] += rng.standard_normal(n) * np.exp(-np.arange(n) / 30)
+    return bp(x, 800, 5000) * np.sin(np.pi * t / d) * 0.35
+def sfx_drip(d=0.25): t = tt(d); f = 600 + 900 * t / d; return np.sin(2 * np.pi * np.cumsum(f) / SR) * env(len(t), 0.002, d, 4) * 0.4
+def sfx_thud(d=0.35): return lp(sfx_hit(d), 900) * 0.8 + bp(noise(d), 300, 900) * env(int(d * SR), 0.002, 0.05) * 0.3
+def sfx_rise(d=0.6, f0=500, f1=1400):  # короткий восходящий тон: рост, заполнение
+    t = tt(d); f = f0 + (f1 - f0) * (t / d) ** 2; return np.sin(2 * np.pi * np.cumsum(f) / SR) * np.sin(np.pi * t / d) * 0.25
 SFX = {k[4:]: v for k, v in globals().items() if k.startswith('sfx_')}
 
 # ---------------- партитура ----------------
@@ -145,10 +164,11 @@ def score(D, cfg):
         i0, i1 = int(h0 * SR), int((h0 + hd) * SR); L[i0:i1] *= 0.0; R[i0:i1] *= 0.0
     return np.stack([L, R])[:, : int(D * SR)]
 
-def place(buf, x, t, g=1.0, pan=0.0):
-    i = int(t * SR); n = min(len(x), buf.shape[1] - i)
-    if n <= 0 or i < 0: return
-    buf[0, i:i + n] += x[:n] * g * (1 - pan * 0.6); buf[1, i:i + n] += x[:n] * g * (1 + pan * 0.6)
+def place(buf, x, t, g=1.0, pan=0.0, wrap=False):  # wrap: хвост звука уходит в начало (петля без шва)
+    N = buf.shape[1]; i = int(t * SR) % N if wrap else int(t * SR)
+    if i < 0 or i >= N: return
+    n = min(len(x), N - i); buf[0, i:i + n] += x[:n] * g * (1 - pan * 0.6); buf[1, i:i + n] += x[:n] * g * (1 + pan * 0.6)
+    if wrap and len(x) > n: place(buf, x[n:], 0, g, pan, True)
 
 def load_voice(proj, D):
     for ext in ('wav', 'mp3', 'm4a', 'ogg'):
@@ -173,12 +193,12 @@ def main():
     proj = os.path.abspath(sys.argv[1]); out = os.path.join(proj, 'out')
     if '--check' in sys.argv: return check(os.path.join(out, 'final.mp4'))
     meta = json.load(open(os.path.join(out, 'meta.json'))); D = meta['duration']; cfg = meta.get('audio') or {}
-    mus = score(D, cfg) * cfg.get('music', 1.0)
+    mus = score(D, cfg) * cfg.get('music', 1.0) if cfg.get('music', 1.0) else np.zeros((2, int(D * SR)))   # music:0 — только эффекты
     fx = np.zeros((2, int(D * SR)))
     for e in meta['events']:
         k = e['kind']
         if k in ('none', None) or k not in SFX: continue
-        x = SFX[k](e['d']) if e.get('d') else SFX[k](); place(fx, x, e['t'], e.get('g', 1) * cfg.get('sfx', 1.0), pan=math.sin(e['t'] * 1.7) * 0.25)
+        x = SFX[k](e['d']) if e.get('d') else SFX[k](); place(fx, x, e['t'], e.get('g', 1) * cfg.get('sfx', 1.0), pan=math.sin(e['t'] * 1.7) * 0.25, wrap=bool(cfg.get('loop')))
     voice = load_voice(proj, D)
     if voice is not None:  # приседание музыки под голос (сайдчейн)
         envv = lp(np.abs(voice), 8); envv = envv / (envv.max() + 1e-9); duck = 1 - 0.62 * np.clip(envv * 3, 0, 1)
