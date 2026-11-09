@@ -142,8 +142,13 @@ export function fig(x, gy, h, P, o = {}) { const d = o.dir || 1, L = { th: 0.25 
   const hip = [0, 0], lean = P.lean || 0, neck = add(hip, v(Math.PI - lean, L.to)), head = add(neck, v(Math.PI - lean - (P.nod || 0) * 0.7, L.hr * 1.5));
   const leg = i => { const k = add(hip, v((P.hip || [0, 0])[i], L.th)); return [k, add(k, v((P.hip || [0, 0])[i] - (P.kn || [0, 0])[i], L.sh))]; };
   const arm = i => { const sh = add(neck, v(-lean, 0.03 * h)), a = (P.sh || [0, 0])[i], e = add(sh, v(a, L.ua)); return [sh, e, add(e, v(a + (P.el || [0, 0])[i], L.fa))]; };   // руки — углы от вертикали
-  const lg = [leg(0), leg(1)], ar = [arm(0), arm(1)], low = Math.max(lg[0][1][1], lg[1][1][1]);
-  const ox = x, oy = gy - low - (P.up || 0) * h, T_ = p => [ox + p[0], oy + p[1]], w = o.w || 0.075 * h;
+  let lg = [leg(0), leg(1)]; const ar = [arm(0), arm(1)], low = Math.max(lg[0][1][1], lg[1][1][1]);
+  let ox = x, oy = gy - low - (P.up || 0) * h;
+  if (o.feet && o.hip) { ox = o.hip[0]; oy = o.hip[1];                       // ступни заданы (gait): колени — обратной кинематикой
+    lg = o.feet.map(f => { const fx = f[0] - ox, fy = f[1] - oy, dd = Math.min(Math.hypot(fx, fy), L.th + L.sh - 0.01), b = Math.atan2(fy, fx);
+      const A = Math.acos(clamp((L.th * L.th + dd * dd - L.sh * L.sh) / (2 * L.th * dd), -1, 1)), k1 = [Math.cos(b + A) * L.th, Math.sin(b + A) * L.th], k2 = [Math.cos(b - A) * L.th, Math.sin(b - A) * L.th];
+      return [(k1[0] - k2[0]) * d > 0 ? k1 : k2, [Math.cos(b) * dd, Math.sin(b) * dd]]; }); }
+  const T_ = p => [ox + p[0], oy + p[1]], w = o.w || 0.075 * h;
   X.save(); X.lineCap = 'round'; X.lineJoin = 'round'; if (o.glow) { X.shadowColor = o.gc || o.c || '#fff'; X.shadowBlur = o.glow; } X.globalAlpha *= o.a ?? 1;
   const limb = (pts, back) => { X.strokeStyle = back ? (o.back || shade(o.c || '#FFFFFF')) : (o.c || '#FFFFFF'); X.lineWidth = w; X.beginPath(); X.moveTo(...T_(pts[0])); for (const p of pts.slice(1)) X.lineTo(...T_(p)); X.stroke(); };
   limb([hip, ...lg[1]], 1); limb(ar[1], 1);                                                   // дальние конечности чуть темнее
@@ -218,10 +223,103 @@ export function icon(n, x, y, s = 60, o = {}) { const c = o.c || C.ink, w = o.w 
     case 'loop': X.save(); st(st_); X.beginPath(); X.arc(x, y, s * 0.38, -0.3, TAU - 1.2); X.stroke(); X.restore(); return arrow([x + s * 0.38 * Math.cos(TAU - 1.2), y + s * 0.38 * Math.sin(TAU - 1.2)], [x + s * 0.38 * Math.cos(-0.3) + 1, y + s * 0.38 * Math.sin(-0.3)], st_, 1, s * 0.18);
   } }
 
+/* ================= ЖИВАЯ ХОДЬБА ================= */
+// gait(u, L, ground, h, o): ступни ставятся на землю и не скользят, колени гнутся сами (подавай в fig как o.feet/o.hip).
+// u — пройденный путь бёдер по x (в мире), L — длина шага, ground(x) → y пола в мире (лестница, горка, ровный пол).
+// o: { map: (x,y)→[sx,sy] мир→экран, lean, lift, arms }. Возвращает { feet, hip, pose, c } в экранных координатах.
+// Петля без шва: за ролик бёдра проходят чётное число шагов (u(D) − u(0) = 2·n·L) и мир сдвигается на период.
+export function gait(u, L, ground, h, o = {}) { const map = o.map || ((x, y) => [x, y]), leg = 0.5 * h, c = u / L, ST = o.stance ?? 0.55;
+  const feet = [0, 1].map(i => { const q = (c - i) / 2, f = Math.floor(q), r = q - f, x0 = (2 * f + i + 0.5) * L;
+    if (r < ST) return [x0, ground(x0)];
+    const s = (r - ST) / (1 - ST), x1 = x0 + 2 * L, y0 = ground(x0), y1 = ground(x1), lift = (o.lift ?? 0.06 * h) + 0.35 * Math.abs(y0 - y1);
+    return [lerp(x0, x1, eIO(s)), lerp(y0, y1, eIO(clamp(s * 1.3))) - lift * Math.sin(Math.PI * s)]; });
+  const sm = x => { const a = Math.floor((x - L / 2) / L) * L + L / 2; return lerp(ground(a), ground(a + L), (x - a) / L); };   // пол без ступенек — для таза
+  const hy = sm(u + 0.2 * L) - leg * (o.height ?? 0.9) - 0.012 * h * Math.cos(TAU * c);    // задняя нога, если не дотягивается, встаёт на носок
+  const a = (o.arms ?? 0.42) * Math.cos(Math.PI * (c - 1.1));
+  return { c, hip: map(u, hy), feet: feet.map(f => map(f[0], f[1])), pose: { lean: o.lean ?? 0.08, nod: 0.05, sh: [a, -a], el: [0.35 + 0.15 * Math.max(0, a), 0.35 + 0.15 * Math.max(0, -a)] } }; }
+// дыхание на месте: подмешай к любой статичной позе, чтобы человечек не был «мёртвым»
+export const breathe = (P, t, n = 3) => Object.assign({}, P, { lean: (P.lean || 0) + 0.015 * osc(t, n), nod: (P.nod || 0) + 0.03 * osc(t, n, 1, 0.25), up: (P.up || 0) + 0.004 * osc(t, n) });
+// изинг с замахом и перелётом — для «живых» переездов предметов
+export const eBack = k => { const c = 1.70158 * 1.525; return k < 0.5 ? (Math.pow(2 * k, 2) * ((c + 1) * 2 * k - c)) / 2 : (Math.pow(2 * k - 2, 2) * ((c + 1) * (k * 2 - 2) + c) + 2) / 2; };
+
+/* ================= ФОРМУЛЫ: РАСКЛАДКА И ПРЕВРАЩЕНИЯ (как Manim) ================= */
+// Синтаксис: '√{50} + √8', '5√2', '√{5^{2@p}×2}', 'frac{a+b}{2}', 'x^2', '(5 + 2)√2'. Пробелы игнорируются.
+// Каждый знак получает ключ «текст#номер»; одинаковые ключи в двух формулах при morph переезжают, остальные растворяются/появляются.
+// Свой ключ: 50@n, √{…}@r, {…}@g — так можно «переименовать» часть (50 → 25@n заменится на месте).
+const OPS = '+−-=×·÷<>≤≥≈→';
+function parseEx(s) { let i = 0;
+  const tok = () => { const m = s.slice(i).match(/^(\d+(?:[.,]\d+)?|[A-Za-zА-Яа-яЁёα-ωΑ-Ω]|.)/u); i += m[0].length; return { t: 'tok', s: m[0] }; };
+  const grp = () => { if (s[i] === '{') { i++; const k = seq('}'); i++; return k; } return [tok()]; };
+  function seq(end) { const out = []; while (i < s.length && s[i] !== end) { const c = s[i];
+    if (c === ' ') { i++; continue; }
+    if (c === '√') { i++; out.push({ t: 'sqrt', k: grp() }); continue; }
+    if (c === '^') { i++; out.push({ t: 'sup', k: grp() }); continue; }
+    if (s.startsWith('frac{', i)) { i += 4; const a = grp(), b = grp(); out.push({ t: 'frac', a, b }); continue; }
+    if (c === '{') { out.push({ t: 'grp', k: grp() }); continue; }
+    if (c === '@') { i++; let n = ''; while (i < s.length && /[\w.]/.test(s[i])) n += s[i++]; if (out.length) out[out.length - 1].key = n; continue; }
+    out.push(tok()); } return out; }
+  return seq(undefined); }
+function layEx(nodes, size, cnt, pre = '') { const items = [], rads = [], bars = []; let x = 0, top = -0.45 * size, bot = 0.45 * size;
+  const key = (n, s) => n.key ? pre + n.key : (cnt[s] = (cnt[s] ?? -1) + 1, s + '#' + cnt[s]);
+  const put = (L, dx, dy) => { L.items.forEach(q => items.push({ ...q, x: q.x + dx, y: q.y + dy })); L.rads.forEach(q => rads.push({ ...q, x: q.x + dx, y: q.y + dy })); L.bars.forEach(q => bars.push({ ...q, x: q.x + dx, y: q.y + dy })); top = Math.min(top, L.top + dy); bot = Math.max(bot, L.bot + dy); };
+  for (const n of nodes) {
+    if (n.t === 'tok') { const it = /[A-Za-zА-Яа-яЁёα-ωΑ-Ω]/u.test(n.s), op = OPS.includes(n.s), pad = op ? size * 0.24 : 0;
+      X.save(); X.font = `${it ? 'italic ' : ''}400 ${size}px "PTSerif"`; const w = X.measureText(n.s).width; X.restore();
+      items.push({ key: key(n, n.s), s: n.s, x: x + pad, y: 0, size, it, w }); x += w + 2 * pad; }
+    else if (n.t === 'sup') { const L = layEx(n.k, size * 0.6, cnt, n.key ? pre + n.key + '.' : pre); put(L, x + size * 0.04, -size * 0.42); x += L.w + size * 0.06; }
+    else if (n.t === 'grp') { const L = layEx(n.k, size, cnt, n.key ? pre + n.key + '.' : pre); put(L, x, 0); x += L.w; }
+    else if (n.t === 'sqrt') { const L = layEx(n.k, size, cnt, pre), sw = size * 0.52; put(L, x + sw, 0); const tp = Math.min(L.top, -0.5 * size) - 0.1 * size;
+      rads.push({ key: key(n, '√'), x, y: 0, w: L.w + size * 0.12, sw, top: tp, bot: 0.48 * size, size }); top = Math.min(top, tp - 0.05 * size); x += sw + L.w + size * 0.08; }
+    else if (n.t === 'frac') { const A = layEx(n.a, size * 0.8, cnt, pre), B = layEx(n.b, size * 0.8, cnt, pre), w = Math.max(A.w, B.w) + size * 0.3;
+      put(A, x + (w - A.w) / 2, -0.12 * size - A.bot); put(B, x + (w - B.w) / 2, 0.02 * size - B.top); bars.push({ key: key(n, 'frac'), x, y: -0.05 * size, w, size }); x += w + size * 0.1; } }
+  return { items, rads, bars, w: x, top, bot }; }
+const EXC = new Map();
+// ex(src, x, y, {size}) → раскладка формулы, центр по x, середина строки по y
+export function ex(src, x, y, o = {}) { const size = o.size || 96, id = src + '|' + size; let L = EXC.get(id);
+  if (!L) { L = layEx(parseEx(src), size, {}); EXC.set(id, L); }
+  const dx = x - L.w / 2; return { src, size, w: L.w, items: L.items.map(q => ({ ...q, x: q.x + dx, y: q.y + y })), rads: L.rads.map(q => ({ ...q, x: q.x + dx, y: q.y + y })), bars: L.bars.map(q => ({ ...q, x: q.x + dx, y: q.y + y })) }; }
+function glyph(q, a, c, o) { if (a <= 0.01) return; M(q.s, q.x + q.w / 2, q.y, { size: q.size, italic: q.it, color: c, alpha: a, align: 'center' }); }
+function radical(q, a, c, k = 1) { if (a <= 0.01) return; const s = q.size, y = q.y; path([[q.x, y + 0.02 * s], [q.x + 0.1 * s, y - 0.05 * s], [q.x + 0.26 * s, y + q.bot], [q.x + q.sw - 0.04 * s, y + q.top], [q.x + q.sw + q.w, y + q.top]], { c, w: Math.max(2, s * 0.035), a, cap: 'butt' }, k); }
+const colOf = (q, o) => (o.colors && (o.colors[q.key] || o.colors[q.s])) || o.color || C.ink;
+// рисует формулу; o: { write: 0..1 — «пишется» слева направо, a, color, colors: {ключ или текст: цвет} }
+export function drawEx(E, o = {}) { const n = E.items.length + E.rads.length, wr = o.write ?? 1, A = o.a ?? 1; let i = 0;
+  const all = [...E.rads.map(q => ['r', q]), ...E.bars.map(q => ['b', q]), ...E.items.map(q => ['i', q])].sort((p, q) => p[1].x - q[1].x);
+  for (const [t, q] of all) { const k = clamp(wr * (n + 1.5) - i++); if (k <= 0) continue;
+    if (t === 'i') glyph(q, A * k, colOf(q, o)); else if (t === 'r') radical(q, A, colOf(q, o), k); else line([q.x, q.y], [q.x + q.w, q.y], { c: colOf(q, o), w: Math.max(2, q.size * 0.035), a: A }, k); } }
+// превращение формулы A → B (одинаковые ключи переезжают): morphEx('√{50}+√8', '√{25×2}+√8', k, x, y, {size})
+export function morphEx(a, b, k, x, y, o = {}) { const A = typeof a === 'string' ? ex(a, x, y, o) : a, B = typeof b === 'string' ? ex(b, x, y, o) : b, e = (o.ease || eIO)(clamp(k));
+  if (e <= 0) return drawEx(A, o); if (e >= 1) return drawEx(B, o);
+  const by = (arr) => new Map(arr.map(q => [q.key, q])), Ai = by(A.items), Bi = by(B.items), Ar = by(A.rads), Br = by(B.rads), Ab = by(A.bars), Bb = by(B.bars), al = o.a ?? 1;
+  const out = clamp(1 - e * 2), inn = clamp(e * 2 - 0.8);
+  for (const [key, q] of Ai) { const r = Bi.get(key); if (!r) { glyph({ ...q, y: q.y - 20 * e }, al * out, colOf(q, o)); continue; }
+    const m = { ...q, x: lerp(q.x, r.x, e), y: lerp(q.y, r.y, e), size: lerp(q.size, r.size, e), w: lerp(q.w, r.w, e) };
+    if (q.s === r.s) glyph(m, al, colOf(q, o)); else { glyph({ ...m, s: q.s }, al * (1 - e), colOf(q, o)); glyph({ ...m, s: r.s }, al * e, colOf(r, o)); } }
+  for (const [key, r] of Bi) if (!Ai.has(key)) glyph({ ...r, y: r.y + 20 * (1 - e) }, al * inn, colOf(r, o));
+  for (const [key, q] of Ar) { const r = Br.get(key); if (!r) { radical(q, al * out, colOf(q, o)); continue; }
+    radical({ ...q, x: lerp(q.x, r.x, e), y: lerp(q.y, r.y, e), w: lerp(q.w, r.w, e), sw: lerp(q.sw, r.sw, e), top: lerp(q.top, r.top, e), bot: lerp(q.bot, r.bot, e), size: lerp(q.size, r.size, e) }, al, colOf(q, o)); }
+  for (const [key, r] of Br) if (!Ar.has(key)) radical(r, al * inn, colOf(r, o));
+  for (const [key, q] of Ab) { const r = Bb.get(key); const m = r ? { ...q, x: lerp(q.x, r.x, e), y: lerp(q.y, r.y, e), w: lerp(q.w, r.w, e) } : q; line([m.x, m.y], [m.x + m.w, m.y], { c: colOf(q, o), w: Math.max(2, q.size * 0.035), a: al * (r ? 1 : out) }); }
+  for (const [key, r] of Bb) if (!Ab.has(key)) line([r.x, r.y], [r.x + r.w, r.y], { c: colOf(r, o), w: Math.max(2, r.size * 0.035), a: al * inn }); }
+// рамка вокруг частей формулы: keys — ключ, массив ключей или функция(q)→bool; 'ALL' — вся формула
+export function exBounds(E, keys) { const hit = q => keys === 'ALL' || (typeof keys === 'function' ? keys(q) : [].concat(keys).some(k => q.key === k || q.key.startsWith(k + '.') || q.s === k && !String(k).includes('#')));
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const q of E.items) if (hit(q)) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x + q.w); y0 = Math.min(y0, q.y - 0.42 * q.size); y1 = Math.max(y1, q.y + 0.42 * q.size); }
+  for (const q of E.rads) if (hit(q)) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x + q.sw + q.w); y0 = Math.min(y0, q.y + q.top); y1 = Math.max(y1, q.y + q.bot); }
+  return x0 > x1 ? null : [x0, y0, x1, y1]; }
+export function exBox(E, keys, c = C.green, k = 1, pad = 10) { const b = exBounds(E, keys); if (b) box(b[0] - pad, b[1] - pad, b[2] - b[0] + 2 * pad, b[3] - b[1] + 2 * pad, { c, w: 3 }, k); }
+export function exStrike(E, keys, c = C.red, k = 1, pad = 12) { const b = exBounds(E, keys); if (!b) return; const [x0, y0, x1, y1] = [b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad];
+  line([x0, y1], [x1, y0], { c, w: 6 }, clamp(k * 2)); line([x0, y0], [x1, y1], { c, w: 6 }, clamp(k * 2 - 1)); }
+// цепочка шагов: steps = ['√{50}+√8', '√{25×2}+√8', …], marks = моменты начала каждого перехода, dur — длина перехода.
+// Возвращает текущую раскладку (для exBox/exStrike) и рисует превращение.
+export function exChain(steps, marks, dur, t, x, y, o = {}) { let i = 0; while (i + 1 < marks.length && t >= marks[i + 1]) i++;
+  if (t < marks[0]) { drawEx(ex(steps[0], x, y, o), o); return ex(steps[0], x, y, o); }
+  const k = clamp((t - marks[i]) / dur); morphEx(steps[i], steps[i + 1], k, x, y, o); return ex(k < 0.5 ? steps[i] : steps[i + 1], x, y, o); }
+
 /* ================= ЗАПУСК ================= */
-// film({ d, draw(t), sfx:[[t,'pop',громкость,длит]], bloom, title, narr })
+// film({ d, draw(t), sfx:[[t,'pop',громкость,длит]], bloom, zoom=0.86, title, narr })
+// zoom: «камера» чуть отдалена, чтобы картинка не залезала под лайки/аватар справа и подпись снизу (1 — во весь кадр)
 // звуки (без музыки): pop snap slide draw click ding crackle drip thud rise whoosh tick beep hit swoosh_in heartbeat
 export function film(o) { D = o.d;
   run({ title: o.title || 'loop', fps: o.fps || 30, bg: '#000', accent: o.accent || C.green, fx: { bloom: o.bloom ?? 0, vignette: o.vignette ?? 0, grain: o.grain ?? 0 },
-    shots: [{ d: o.d, cam: false, pop: false, draw: (p, t) => { X.save(); bg(o.bg); o.draw(t); X.restore(); }, sfx: o.sfx || [] }],
+    shots: [{ d: o.d, cam: false, pop: false, draw: (p, t) => { X.save(); bg(o.bg); const z = o.zoom ?? 0.86; X.translate(W * 0.48, H * 0.46); X.scale(z, z); X.translate(-W / 2, -H / 2); o.draw(t); X.restore(); }, sfx: o.sfx || [] }],
     narr: o.narr || [], audio: { music: 0, loop: true, sfx: o.sfxGain ?? 1, lufs: o.lufs ?? -16 } }); }

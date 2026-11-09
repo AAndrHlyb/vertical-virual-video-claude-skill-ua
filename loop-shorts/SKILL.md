@@ -22,7 +22,8 @@ K.film({ d: 10, bloom: 0, sfx: [[0.2, 'draw'], [3, 'snap'], [5, 'ding']], draw(t
   // всё — функции от t (0..d). В t = d кадр обязан совпасть с t = 0.
 } });
 ```
-`film({ d, draw, sfx, bloom=0, vignette=0, grain=0, title, narr })`. Холст 1080×1920, фон чёрный. Ключевое держи в y 300–1650 (сверху и снизу интерфейс соцсети).
+`film({ d, draw, sfx, bloom=0, zoom=0.86, vignette=0, grain=0, title, narr })`. Холст 1080×1920, фон чёрный.
+**Безопасная зона:** `zoom: 0.86` (по умолчанию) — «камера» чуть отдалена и сдвинута влево-вверх, чтобы картинка не залезала под лайки/аватар справа и подпись снизу. Рисуй как обычно в координатах 1080×1920, держи главное в x 80–1000, y 250–1700. `zoom: 1` — только для фона во весь кадр.
 
 ## Петля — правила
 - Повторяющееся движение — только через `ph(t, n)` / `osc(t, n)` с **целым** n: тогда шва нет.
@@ -30,6 +31,12 @@ K.film({ d: 10, bloom: 0, sfx: [[0.2, 'draw'], [3, 'snap'], [5, 'ding']], draw(t
 - Ключи `tl(t, [[0,v0],[2,v1],…,[d,v0]])` — последний ключ равен первому.
 - Не замыкается само (счётчик, текст) — `fadeIO(t)` как прозрачность или сбрасывай невидимо.
 - После рендера `loopcheck.py` обязан сказать «ОК».
+
+## Живые движения — обязательно
+- Ходьба — только `gait` (ноги на земле), не `POSE.walk` на месте под скользящим миром.
+- Стоящий человечек — `breathe(pose, t)`, не замороженная поза.
+- Предметы прибывают с `eOut`/`back`/`eBack` (замах и перелёт), а не линейно; переходы поз — `mixPose(A, B, seg(...))`.
+- Причина и следствие в одном кадре: толкнул — сразу поехало; стыковка — `snap` в тот же момент.
 
 ## Шпаргалка kit.js
 **Время:** `ph(t,n)` фаза 0..1 · `osc(t,n,amp)` · `seg(t,t0,t1,e?)` · `bump(t,t0,dur)` 0→1→0 · `fadeIO(t,f)` · `tl(t,keys)` · `step(t,[0,3,6])→[i,k]` · изинги `eIO eOut eIn back spring`, `lerp clamp inv`.
@@ -40,8 +47,14 @@ K.film({ d: 10, bloom: 0, sfx: [[0.2, 'draw'], [3, 'snap'], [5, 'ding']], draw(t
 **Текст:** `T` заголовки (Oswald) · `M` математика курсивом · `S` текст с засечками · `mono` · `type(s,x,y,t,t0,cps)` печатная машинка · `formula([['c²',t0,цвет],[' = ',t1],…],x,y,t,{size,a})` растёт по частям · `pow_('1,01','365',' ≈ 37,8',x,y,o)` любая степень · `frameBox(x,y,w,h,k)` рамка итога · `wrapLines(s,maxW,size)`. Опции текста: `{ size, color, alpha, weight, align }`.
 **Индикаторы:** `bar(x,y,w,level,c,label)` светящаяся полоска · `levelColor(v)` · `ring(x,y,r,k,c)` · `counter(v,x,y,{pre,post,size})` · `bars(x,y,w,h,vals,k,cols,labels)` · `checkbox(x,y,s,k)` · `chain(x,y,n,done)` серия дней.
 **Эффекты (петлевые):** `flame(x,y,s,t,k,seed)` огонь, k 0..1 (0 — угли) · `embers` · `halo(x,y,r,c,a)` · `burst(x,y,t,t0,dur,n,c)` искры · `ripple(x,y,t,n,R)` · `dust(t,n)` · `drops(x0,y0,x1,y1,t,n,c)` струя · `spotlight(x,y,r,a)`.
+**Формулы как в Manim** (корни, степени, дроби, превращения):
+- синтаксис: `'√{50} + √8'`, `'5√2'`, `'x^2'`, `'√{5^{2@s} × 2}'`, `'frac{a+b}{2}'`, `'(5 + 2)√2'`; буквы курсивом, цифры прямо.
+- ключи: каждый знак — «текст#номер»; при превращении одинаковые ключи **переезжают**, остальные растворяются/появляются. Свой ключ `50@a` → в следующем шаге `25@a` заменится на том же месте и поедет вместе с ключом.
+- `ex(src,x,y,{size})` → раскладка · `drawEx(E,{write,a,color,colors})` (`write` 0..1 — «пишется») · `morphEx(srcA,srcB,k,x,y,o)` · `exChain(steps,marks,dur,t,x,y,o)` → текущая раскладка (цепочка шагов одной строкой) · `exBox(E,keys,c,k)` рамка (ключ, массив, текст или `'ALL'`) · `exStrike(E,keys,c,k)` красный крест · `exBounds(E,keys)`.
+- образец: `examples/algebra` (√50 + √8 → неверный путь √58 зачёркнут → 7√2).
 **Человечек:** `fig(x, groundY, h, pose, {dir:±1, c, glow, a})` → `{hand, hand2, head, hip, top}` (точки для реквизита). Ноги сами встают на `groundY`.
 Позы `POSE.`: `stand walk(p) run(p) sit pour(k) lift(k) think cheer(lt) slump push(p) phone read climb(p) sleep wave(lt) bow(k)`; `p` = `ph(t,n)`. Смесь: `mixPose(A,B,k)`. Своя поза: `{lean, nod, sh:[a,b], el, hip, kn, up}` — углы от вертикали, 0 вниз, π/2 вперёд, π вверх.
+**Живая ходьба (всегда для ходьбы по полу, лестнице, горке):** `const g = gait(u, L, ground, h, {map, lean})` — u путь бёдер, L шаг, `ground(x)` → y пола в мире, `map(x,y)` мир→экран (камера). Рисуй `fig(0, 0, h, g.pose, { feet: g.feet, hip: g.hip })`: ступни стоят и не скользят, колени гнутся сами, задняя нога встаёт на носок. Петля: за ролик чётное число шагов, мир сдвигается ровно на период. Лестница: `ground = x => -Math.floor(x / sw) * sh`, `L = sw`, h ≈ 2.3·sw. Щелчок шага — при целом `u/L`. Образец: `examples/versus`.
 **Реквизит `prop.`:** `can(x,y,s,a)→носик` лейка · `cup book phone dumbbell rock plant(x,y,s,k) seed candle(x,y,s,t,k) clock(x,y,r,t) hourglass(x,y,s,k) stairs(x,y,n,sw,sh)→ступень(i) mountain→вершина flag(x,y,s,t) trophy coin bulb(x,y,s,on)`.
 **Значки:** `icon(имя,x,y,s,{c,fill,glow,k})`: check cross heart star bolt target lock sun moon plus minus eq arrowR loop.
 
@@ -63,4 +76,4 @@ K.film({ d: 10, bloom: 0, sfx: [[0.2, 'draw'], [3, 'snap'], [5, 'ding']], draw(t
 - **Доказательство** (как 3Blue1Brown): `bloom: 0`, линии `w: 3`, заливки pink/blue/indigo/yel, формулы `M`/`formula`, движущаяся часть подсвечивается `C.yel`. 8–30 с.
 - **Мотивация:** `bloom: 0.3`, белые `fig` с `glow`, `ground`, огонь, полоски green/red, заголовок `T` крупно. 6–15 с.
 
-Примеры (читать, только если нужен образец): `examples/proof` — углы треугольника, `examples/versus` — «1% каждый день», `examples/kit` — все элементы на одном кадре.
+Примеры (читать, только если нужен образец): `examples/proof` — углы треугольника, `examples/versus` — «1% каждый день» (живая ходьба по лестнице), `examples/algebra` — превращения формул, `examples/kit` — все элементы на одном кадре.
