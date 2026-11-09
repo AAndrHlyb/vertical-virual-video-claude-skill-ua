@@ -315,6 +315,20 @@ export function exChain(steps, marks, dur, t, x, y, o = {}) { let i = 0; while (
   if (t < marks[0]) { drawEx(ex(steps[0], x, y, o), o); return ex(steps[0], x, y, o); }
   const k = clamp((t - marks[i]) / dur); morphEx(steps[i], steps[i + 1], k, x, y, o); return ex(k < 0.5 ? steps[i] : steps[i + 1], x, y, o); }
 
+/* ================= ПОДРОБНОЕ ДОКАЗАТЕЛЬСТВО ================= */
+// фигурная скобка от a до b (выгнута наружу, в сторону side=±1) с подписью: brace([x0,y],[x1,y],'πr',{c},k)
+export function brace(a, b, label = '', o = {}, k = 1, side = -1) { if (k <= 0) return; const L = dist(a, b), an = ang(a, b), nx = -Math.sin(an) * side, ny = Math.cos(an) * side, d = o.d || 26;
+  const P = (u, v) => [a[0] + (b[0] - a[0]) * u - nx * v, a[1] + (b[1] - a[1]) * u - ny * v], pts = [];
+  for (let i = 0; i <= 60; i++) { const u = i / 60, q = u < 0.5 ? u * 2 : (1 - u) * 2; pts.push(P(u, d * (Math.pow(q, 0.25) * 0.55 + (q > 0.96 ? (q - 0.96) * 11 : 0)))); }
+  path(pts, { c: o.c || C.ink, w: o.w || 3 }, k); if (label) { const m = P(0.5, d + (o.gap || 46)); M(label, m[0], m[1], { size: o.size || 54, color: o.lc || o.c || C.ink, alpha: clamp(k * 2 - 1) }); } }
+// подпись шага внизу: «2 · Разрежем круг на секторы», появляется в t0, гаснет в t1
+export function caption(n, s, t, t0, t1, o = {}) { const a = clamp((t - t0) / 0.35) * clamp((t1 - t) / 0.35); if (a <= 0) return; const y = o.y || 1580, lines = wrapLines(s, 880, o.size || 54, 'Oswald');
+  if (n) { X.save(); X.globalAlpha = a; circ(K_W / 2 - 0, y - 70, 28, { c: o.c || C.yel, w: 3 }); X.restore(); T(String(n), K_W / 2, y - 68, { size: 34, color: o.c || C.yel, alpha: a }); }
+  lines.forEach((l, i) => T(l, K_W / 2, y + i * (o.size || 54) * 1.25, { size: o.size || 54, weight: 500, color: o.tc || C.ink, alpha: a })); }
+const K_W = W;
+// сколько показать: подробный ролик = шаги. steps(t, [[t0, t1], …]) → индекс текущего шага или −1
+export const stepAt = (t, list) => list.findIndex(([a, b]) => t >= a && t < b);
+
 /* ================= ЗАПУСК ================= */
 // film({ d, draw(t), sfx:[[t,'pop',громкость,длит]], bloom, zoom=0.86, title, narr })
 // zoom: «камера» чуть отдалена, чтобы картинка не залезала под лайки/аватар справа и подпись снизу (1 — во весь кадр)
