@@ -246,9 +246,9 @@ export const eBack = k => { const c = 1.70158 * 1.525; return k < 0.5 ? (Math.po
 // Синтаксис: '√{50} + √8', '5√2', '√{5^{2@p}×2}', 'frac{a+b}{2}', 'x^2', '(5 + 2)√2'. Пробелы игнорируются.
 // Каждый знак получает ключ «текст#номер»; одинаковые ключи в двух формулах при morph переезжают, остальные растворяются/появляются.
 // Свой ключ: 50@n, √{…}@r, {…}@g — так можно «переименовать» часть (50 → 25@n заменится на месте).
-const OPS = '+−-=×·÷±∓<>≤≥≈→';
+const OPS = '+−-=×·÷±∓<>≤≥≈→', FN = new Set(['sin', 'cos', 'tg', 'ctg', 'tan', 'cot', 'log', 'ln', 'lim', 'max', 'min']);   // функции — прямым шрифтом одним словом
 function parseEx(s) { let i = 0;
-  const tok = () => { const m = s.slice(i).match(/^(\d+(?:[.,]\d+)?|[A-Za-zА-Яа-яЁёα-ωΑ-Ω]|.)/u); i += m[0].length; return { t: 'tok', s: m[0] }; };
+  const tok = () => { const m = s.slice(i).match(/^(sin|cos|tg|ctg|tan|cot|log|ln|lim|max|min|\d+(?:[.,]\d+)?|[A-Za-zА-Яа-яЁёα-ωΑ-Ω]|.)/u); i += m[0].length; return { t: 'tok', s: m[0] }; };
   const grp = () => { if (s[i] === '{') { i++; const k = seq('}'); i++; return k; } return [tok()]; };
   function seq(end) { const out = []; while (i < s.length && s[i] !== end) { const c = s[i];
     if (c === ' ') { i++; continue; }
@@ -263,7 +263,7 @@ function layEx(nodes, size, cnt, pre = '') { const items = [], rads = [], bars =
   const key = (n, s) => n.key ? pre + n.key : (cnt[s] = (cnt[s] ?? -1) + 1, s + '#' + cnt[s]);
   const put = (L, dx, dy) => { L.items.forEach(q => items.push({ ...q, x: q.x + dx, y: q.y + dy })); L.rads.forEach(q => rads.push({ ...q, x: q.x + dx, y: q.y + dy })); L.bars.forEach(q => bars.push({ ...q, x: q.x + dx, y: q.y + dy })); top = Math.min(top, L.top + dy); bot = Math.max(bot, L.bot + dy); };
   for (const n of nodes) {
-    if (n.t === 'tok') { const it = /[A-Za-zА-Яа-яЁёα-ωΑ-Ω]/u.test(n.s), op = OPS.includes(n.s), pad = op ? size * 0.24 : 0;
+    if (n.t === 'tok') { const fn = FN.has(n.s), it = !fn && /[A-Za-zА-Яа-яЁёα-ωΑ-Ω]/u.test(n.s), op = OPS.includes(n.s), pad = op ? size * 0.24 : fn ? size * 0.16 : 0;
       X.save(); X.font = `${it ? 'italic ' : ''}400 ${size}px "PTSerif"`; const w = X.measureText(n.s).width; X.restore();
       items.push({ key: key(n, n.s), s: n.s, x: x + pad, y: 0, size, it, w }); x += w + 2 * pad; }
     else if (n.t === 'sup') { const L = layEx(n.k, size * 0.6, cnt, n.key ? pre + n.key + '.' : pre); put(L, x + size * 0.04, -size * 0.42); x += L.w + size * 0.06; }
